@@ -299,89 +299,86 @@ export const handleBatchOptIn = async ({
 	}
 	const waitRoundsToConfirm = 8
 	const suggestedParams = await algodClient.getTransactionParams().do()
+	let processedTxns = []
+	let txID = ''
 	try {
-		let hop = 1
-		const assetLength = yetToOptIn.length
+		const assetLength = yetToOptIn?.length
 		const hops = Math.ceil(assetLength / 1000)
+		let hop = 1
 		while (hop <= hops) {
-			const point_ = (hop - 1) * 1000
-			const end_ = hop * 1000
-			const stop_ = end_ > assetLength ? assetLength : end_
-			const batch = yetToOptIn.slice(point_, stop_)
-			let x = point_
-			while (x <= stop_) {
-				let txID = ''
-				const parentTxns = []
-				const len = batch.length
-				const steps = Math.ceil(len / 16)
-				let step = 1
-				while (step <= steps) {
-					const point = (step - 1) * 16
-					const end = step * 16
-					const stop = end > len ? len : end
-					let i = point
-					const txns = []
-					while (i < stop) {
-						try {
-							const uniqueNote = `Asset opt-in transaction initiated by Aro1914 | #${Date.now()}-${Math.random()}.`
-							const user_aXferTxn =
-								algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-									from: account.addr,
-									to: account.addr,
-									assetIndex: batch[i],
-									suggestedParams,
-									note: new Uint8Array(Buffer.from(uniqueNote)),
-									amount: 0,
-								})
-							txns.push(user_aXferTxn)
-						} catch (err) {
-							console.error(err)
-						}
-						i++
+			const point = (hop - 1) * 1000
+			const end = hop * 1000
+			const stop = end > assetLength ? assetLength : end
+			const batch = yetToOptIn.slice(point, stop)
+			const batchLen = batch.length
+			const steps = Math.ceil(batchLen / 16)
+			let step = 1
+			const wrapperTxns = []
+			while (step <= steps) {
+				const point = (step - 1) * 16
+				const end = step * 16
+				const stop = end > batchLen ? batchLen : end
+				let i = point
+				const txns = []
+				while (i < stop) {
+					try {
+						const uniqueNote = `Asset opt-in transaction initiated by Aro1914 | #${Date.now()}-${Math.random()}.`
+						const user_aXferTxn =
+							algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+								from: account.addr,
+								to: account.addr,
+								assetIndex: batch[i],
+								suggestedParams,
+								note: new Uint8Array(Buffer.from(uniqueNote)),
+								amount: 0,
+							})
+						txns.push(user_aXferTxn)
+					} catch (err) {
+						console.error(err)
 					}
-					const txnGroup = algosdk.assignGroupID(txns, account.addr)
-					// const lenLen = txnGroup.length
-					// const encodedTxns = []
-					// let ii = 0
-					// while (ii < lenLen) {
-					// 	encodedTxns.push(algosdk.encodeUnsignedTransaction(txnGroup[ii]))
-					// 	ii++
-					// }
-					parentTxns.push(txnGroup)
-					step++
+					i++
 				}
-				let xTxn = 0
-				const xTxnLen = parentTxns.length
-				for (xTxn; xTxn < xTxnLen; xTxn++) {
-					const txns = parentTxns[xTxn]
-					const { txId } = await algodClient
-						.sendRawTransaction(
-							await Promise.all(txns.map((txn) => txn.signTxn(account.sk)))
-						)
-						.do()
-					txID = txId
-					await algosdk.waitForConfirmation(
-						algodClient,
-						txns?.[0].txID().toString() ?? txId,
-						waitRoundsToConfirm
-					)
-				}
-				optedInAssets = optedInAssets.concat(batch)
-				x++
+				const txnGroup = algosdk.assignGroupID(txns, account.addr)
+				// const lenLen = txnGroup.length
+				// const encodedTxns = []
+				// let ii = 0
+				// while (ii < lenLen) {
+				// 	encodedTxns.push(algosdk.encodeUnsignedTransaction(txnGroup[ii]))
+				// 	ii++
+				// }
+				wrapperTxns.push(txnGroup)
+				step++
 			}
+			let xTxn = 0
+			const xTxnLen = wrapperTxns.length
+			for (xTxn; xTxn < xTxnLen; xTxn++) {
+				const txns = wrapperTxns[xTxn]
+				const { txId } = await algodClient
+					.sendRawTransaction(
+						await Promise.all(txns.map((txn) => txn.signTxn(account.sk)))
+					)
+					.do()
+				txID = txId
+				await algosdk.waitForConfirmation(
+					algodClient,
+					txns?.[0].txID().toString() ?? txId,
+					waitRoundsToConfirm
+				)
+			}
+			optedInAssets = processedTxns.concat(batch)
 			hop++
 		}
 		return {
 			success: true,
 			txID,
-			optIns: optedInAssets,
+			optIns: processedTxns,
 			assets,
 		}
 	} catch (err) {
 		console.error(err)
 		return {
 			success: false,
-			optIns: optedInAssets,
+			optIns: processedTxns,
 			assets,
 		}
 	}
@@ -417,7 +414,6 @@ export const handleBatchOptOut = async ({
 			optOuts: [],
 			assets,
 		}
-	let optedOutAssets = []
 	const algoBal = (await getBalance(0, account.addr)) / 10 ** 6
 	const minimumBal = (await getMinimumBal(account.addr)) / 10 ** 6
 	if (algoBal < minimumBal + yetToOptOut?.length * 0.001) {
@@ -429,90 +425,87 @@ export const handleBatchOptOut = async ({
 	}
 	const waitRoundsToConfirm = 8
 	const suggestedParams = await algodClient.getTransactionParams().do()
+	let processedTxns = []
+	let txID = ''
 	try {
-		let hop = 1
-		const assetLength = yetToOptOut.length
+		const assetLength = yetToOptOut?.length
 		const hops = Math.ceil(assetLength / 1000)
+		let hop = 1
 		while (hop <= hops) {
-			const point_ = (hop - 1) * 1000
-			const end_ = hop * 1000
-			const stop_ = end_ > assetLength ? assetLength : end_
-			const batch = yetToOptOut.slice(point_, stop_)
-			let x = point_
-			while (x <= stop_) {
-				let txID = ''
-				const parentTxns = []
-				const len = batch.length
-				const steps = Math.ceil(len / 16)
-				let step = 1
-				while (step <= steps) {
-					const point = (step - 1) * 16
-					const end = step * 16
-					const stop = end > len ? len : end
-					let i = point
-					const txns = []
-					while (i < stop) {
-						try {
-							const uniqueNote = `Asset opt-out transaction initiated by Aro1914 | #${Date.now()}-${Math.random()}.`
-							const creator = (await getAssetInfo(batch[i]))?.creator ?? ''
-							const user_aXferTxn =
-								algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
-									from: account.addr,
-									to: creator,
-									assetIndex: batch[i],
-									suggestedParams,
-									closeRemainderTo: creator,
-									note: new Uint8Array(Buffer.from(uniqueNote)),
-								})
-							txns.push(user_aXferTxn)
-						} catch (err) {
-							console.error(err)
-						}
-						i++
+			const point = (hop - 1) * 1000
+			const end = hop * 1000
+			const stop = end > assetLength ? assetLength : end
+			const batch = yetToOptOut.slice(point, stop)
+			const batchLen = batch.length
+			const steps = Math.ceil(batchLen / 16)
+			let step = 1
+			const wrapperTxns = []
+			while (step <= steps) {
+				const point = (step - 1) * 16
+				const end = step * 16
+				const stop = end > batchLen ? batchLen : end
+				let i = point
+				const txns = []
+				while (i < stop) {
+					try {
+						const uniqueNote = `Asset opt-out transaction initiated by Aro1914 | #${Date.now()}-${Math.random()}.`
+						const creator = (await getAssetInfo(batch[i]))?.creator ?? ''
+						const user_aXferTxn =
+							algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+								from: account.addr,
+								to: creator,
+								assetIndex: batch[i],
+								suggestedParams,
+								closeRemainderTo: creator,
+								note: new Uint8Array(Buffer.from(uniqueNote)),
+							})
+						txns.push(user_aXferTxn)
+					} catch (err) {
+						console.error(err)
 					}
-					const txnGroup = algosdk.assignGroupID(txns, account.addr)
-					// const lenLen = txnGroup.length
-					// const encodedTxns = []
-					// let ii = 0
-					// while (ii < lenLen) {
-					// 	encodedTxns.push(algosdk.encodeUnsignedTransaction(txnGroup[ii]))
-					// 	ii++
-					// }
-					parentTxns.push(txnGroup)
-					step++
+					i++
 				}
-				let xTxn = 0
-				const xTxnLen = parentTxns.length
-				for (xTxn; xTxn < xTxnLen; xTxn++) {
-					const txns = parentTxns[xTxn]
-					const { txId } = await algodClient
-						.sendRawTransaction(
-							await Promise.all(txns.map((txn) => txn.signTxn(account.sk)))
-						)
-						.do()
-					txID = txId
-					await algosdk.waitForConfirmation(
-						algodClient,
-						txns?.[0].txID().toString() ?? txId,
-						waitRoundsToConfirm
-					)
-				}
-				optedOutAssets = optedOutAssets.concat(batch)
-				x++
+				const txnGroup = algosdk.assignGroupID(txns, account.addr)
+				// const lenLen = txnGroup.length
+				// const encodedTxns = []
+				// let ii = 0
+				// while (ii < lenLen) {
+				// 	encodedTxns.push(algosdk.encodeUnsignedTransaction(txnGroup[ii]))
+				// 	ii++
+				// }
+				wrapperTxns.push(txnGroup)
+				step++
 			}
+			let xTxn = 0
+			const xTxnLen = wrapperTxns.length
+			for (xTxn; xTxn < xTxnLen; xTxn++) {
+				const txns = wrapperTxns[xTxn]
+				const { txId } = await algodClient
+					.sendRawTransaction(
+						await Promise.all(txns.map((txn) => txn.signTxn(account.sk)))
+					)
+					.do()
+				txID = txId
+				await algosdk.waitForConfirmation(
+					algodClient,
+					txns?.[0].txID().toString() ?? txId,
+					waitRoundsToConfirm
+				)
+			}
+			processedTxns = processedTxns.concat(batch)
 			hop++
 		}
 		return {
 			success: true,
 			txID,
-			optOuts: optedOutAssets,
+			optOuts: processedTxns,
 			assets,
 		}
 	} catch (err) {
 		console.error(err)
 		return {
 			success: false,
-			optOuts: optedOutAssets,
+			optOuts: processedTxns,
 			assets,
 		}
 	}
