@@ -1,0 +1,17 @@
+{
+  "name": "batch-operations",
+  "version": "0.0.1",
+  "description": "attempt to accomplish batch-operations in the thousands",
+  "main": "index.js",
+  "scripts": {
+    "test": "",
+    "dev": "node index.js"
+  },
+  "author": "Aro1914",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "algosdk": "^2.7.0",
+    "dotenv": "^16.4.5"
+  }
+}
