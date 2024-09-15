@@ -7,7 +7,7 @@
     "test": "",
     "dev": "node index.js"
   },
-  "author": "Aro1914",
+  "author": "emmanuel agbavwe",
   "license": "ISC",
   "type": "module",
   "dependencies": {
